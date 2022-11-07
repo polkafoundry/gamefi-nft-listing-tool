@@ -245,7 +245,7 @@ function App() {
   }, [wallet43114, provider43114, marketProvider43114])
 
   const getSDK = useCallback((network) => {
-    switch (network.toLowerCase()) {
+    switch (network?.toLowerCase()) {
       case 'bsc':
         return sdkBSC
       case 'polygon':
@@ -260,7 +260,7 @@ function App() {
   }, [sdkBSC, sdkAvax, sdkETH, sdkPolygon])
 
   const getWallet = useCallback((network) => {
-    switch (network.toLowerCase()) {
+    switch (network?.toLowerCase()) {
       case 'bsc':
         return wallet56
       case 'polygon':
@@ -275,7 +275,7 @@ function App() {
   }, [wallet56, wallet137, wallet1, wallet43114])
 
   const createSellOrder = useCallback(async (item, wallet: ethers.Wallet) => {
-    const sdk = getSDK(item.network)
+    const sdk = getSDK(item?.network)
     if (!sdk) return
     if (!item?.gamefiAsset || !item?.network || !item?.price || !item?.paymentToken) {
       console.log('missing data to list the item', item)
@@ -331,7 +331,8 @@ function App() {
       const promises = []
       for (let j = i; j < i + 5; j++) {
         promises.push(new Promise((resolve, reject) => {
-          return createSellOrder(assets[j], getWallet(assets[j].network)).finally(() => resolve(null))
+          console.log(assets[j])
+          return createSellOrder(assets[j], getWallet(assets[j]?.network)).finally(() => resolve(null))
        }))
       }
       await Promise.all(promises).then(res => console.log('Done 1'))
