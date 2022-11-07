@@ -348,7 +348,7 @@ function App() {
     <Content>
       <div className="site-layout-content" style={{ minHeight: '100vh' }}>
         <div className="container">
-          <div style={{ color: red.primary, marginBottom: '10px' }}>Warning: If your account has not listed any item on GameFi.org Digital Collectibles before, you should manually list 1 item on the website before using this tool</div>
+          <div style={{ color: red.primary, marginBottom: '10px' }}>Warning: If your account has not listed any item have the same network with your NFT on GameFi.org Digital Collectibles before, you should manually list 1 item on the website before using this tool</div>
           <div style={{ marginBottom: '10px' }}>1. Upload CSV file following <Link href="/demo.csv" download>this format</Link></div>
           <ul>
               <li>Network can be: bsc, eth, polygon, avalanche</li>
