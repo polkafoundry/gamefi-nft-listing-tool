@@ -156,7 +156,7 @@ function App() {
         await tokenContract.approve('0x384A47e8A61C6D3eEdDae213c1C18398e3eceAc7', ethers.constants.MaxUint256)
       }
 
-      if (address.toLowerCase() === '0xdAC17F958D2ee523a2206206994597C13D831ec7') {
+      if (address.toLowerCase() === '0xdac17f958d2ee523a2206206994597c13d831ec7') {
         const signer = wallet1.connect(provider1)
         const tokenContract = new ethers.Contract(address, ERC20_ABI, signer)
         await tokenContract.approve('0x9daa2cFD70D1f92a2Cf560eF8078b680151D0977', ethers.constants.MaxUint256)
@@ -168,7 +168,7 @@ function App() {
         await tokenContract.approve('0xd4B3b80698287F612B8f78822878fee8a298Af6c', ethers.constants.MaxUint256)
       }
 
-      if (address.toLowerCase() === '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7') {
+      if (address.toLowerCase() === '0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7') {
         const signer = wallet43114.connect(provider43114)
         const tokenContract = new ethers.Contract(address, ERC20_ABI, signer)
         await tokenContract.approve('0x2b820C3ae26d80b5c3E2efB58e40c79A39C8eEaB', ethers.constants.MaxUint256)
