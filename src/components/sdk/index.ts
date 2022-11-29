@@ -7,6 +7,7 @@ import { ethers, providers } from 'ethers'
 import { EventEmitter, EventSubscription } from 'fbemitter'
 import * as _ from 'lodash'
 import Web3 from 'web3'
+import ProxyRegistryABI from '../../abi/proxyRegistry.json'
 import { WyvernProtocol } from 'wyvern-js'
 import * as WyvernSchemas from 'wyvern-schemas'
 import { Schema } from 'wyvern-schemas/dist/types'
@@ -108,7 +109,7 @@ import {
   getAssetItemType,
   BigNumberInput
 } from 'opensea-js/lib/utils/utils'
-import { Asset, GameFiAsset, GameFiOrderWithSignature, merkleValidatorByChainId } from './types'
+import { Asset, GameFiAsset, GameFiOrderWithSignature, merkleValidatorByChainId, proxyRegistryContractByChainId } from './types'
 import { gamefiOrderToJSON, signTypedDataAsync, API_NFT_URL, MARKET_PLACE_FEE_RECIPIENT, MIN_EXPIRATION_MINUTES, ORDER_MATCHING_LATENCY_SECONDS } from './utils'
 
 export class SDK {
@@ -816,6 +817,8 @@ export class SDK {
       tokenAddress
     ) as unknown as ERC721v3Abi | ERC1155Abi
 
+    console.log('token contract', tokenContract, tokenAddress)
+
     if (!proxyAddress) {
       proxyAddress = (await this._getProxy(accountAddress)) || undefined
       if (!proxyAddress) {
@@ -833,6 +836,7 @@ export class SDK {
           .isApprovedForAll(accountAddress, proxyAddress)
           .encodeABI()
       })
+      console.log('approve all check', parseInt(isApprovedForAllRaw))
       return parseInt(isApprovedForAllRaw)
     }
 
@@ -863,24 +867,26 @@ export class SDK {
           contractAddress: tokenAddress
         })
 
-        const txHash = await sendRawTransaction(
-          this.web3,
+        console.log('start approve', {
+          from: accountAddress,
+          to: tokenContract.options.address,
+          data: tokenContract.methods
+            .setApprovalForAll(proxyAddress, true)
+            .encodeABI()
+        })
+        const feeData = await this.signer.getFeeData()
+        const txHash = await this.signer.sendTransaction(
           {
             from: accountAddress,
             to: tokenContract.options.address,
             data: tokenContract.methods
               .setApprovalForAll(proxyAddress, true)
-              .encodeABI()
-          },
-          (error) => {
-            this._dispatch(EventType.TransactionDenied, {
-              error,
-              accountAddress
-            })
+              .encodeABI(),
+            gasPrice: feeData?.gasPrice
           }
         )
         await this._confirmTransaction(
-          txHash,
+          txHash?.hash,
           EventType.ApproveAllAssets,
           'Approving all tokens of this type for trading',
           async () => {
@@ -888,7 +894,7 @@ export class SDK {
             return result === 1
           }
         )
-        return txHash
+        return txHash?.hash
       } catch (error) {
         console.error(error)
         throw new Error(
@@ -952,30 +958,23 @@ export class SDK {
         asset: getWyvernAsset(schema, { tokenId, tokenAddress })
       })
 
-      const txHash = await sendRawTransaction(
-        this.web3,
+      const txHash = await this.signer.sendTransaction(
         {
           from: accountAddress,
           to: tokenContract.options.address,
           data: (tokenContract as ERC721v3Abi).methods
             .approve(proxyAddress, tokenId)
             .encodeABI()
-        },
-        (error) => {
-          this._dispatch(EventType.TransactionDenied, {
-            error,
-            accountAddress
-          })
         }
       )
 
       await this._confirmTransaction(
-        txHash,
+        txHash?.hash,
         EventType.ApproveAsset,
         'Approving single token for trading',
         approvalOneCheck
       )
-      return txHash
+      return txHash?.hash
     } catch (error) {
       console.error(error)
       throw new Error(
@@ -1045,8 +1044,7 @@ export class SDK {
       })
     }
 
-    const txHash = await sendRawTransaction(
-      this.web3,
+    const txHash = await this.signer.sendTransaction(
       {
         from: accountAddress,
         to: tokenAddress,
@@ -1056,14 +1054,11 @@ export class SDK {
           // transactions (and because old ERC20s like MANA/ENJ are non-compliant)
           [proxyAddress, WyvernProtocol.MAX_UINT_256.toString()]
         )
-      },
-      (error) => {
-        this._dispatch(EventType.TransactionDenied, { error, accountAddress })
       }
     )
 
     await this._confirmTransaction(
-      txHash,
+      txHash?.hash,
       EventType.ApproveCurrency,
       'Approving currency for trading',
       async () => {
@@ -1075,7 +1070,7 @@ export class SDK {
         return newlyApprovedAmount.isGreaterThanOrEqualTo(minimumAmount)
       }
     )
-    return txHash
+    return txHash?.hash
   }
 
   /**
@@ -1395,27 +1390,20 @@ export class SDK {
     })
 
     const data = encodeTransferCall(abi, fromAddress, toAddress)
-    const txHash = await sendRawTransaction(
-      this.web3,
+    const txHash = await this.signer.sendTransaction(
       {
         from: fromAddress,
         to: abi.target,
         data
-      },
-      (error) => {
-        this._dispatch(EventType.TransactionDenied, {
-          error,
-          accountAddress: fromAddress
-        })
       }
     )
 
     await this._confirmTransaction(
-      txHash,
+      txHash?.hash,
       EventType.TransferOne,
       'Transferring asset'
     )
-    return txHash
+    return txHash?.hash
   }
 
   /**
@@ -1474,28 +1462,34 @@ export class SDK {
       toAddress,
       assets: wyAssets
     })
+    
+    const txHash = await this.signer.sendTransaction({
+      from: fromAddress,
+      to: toAddress,
+      data: encodeProxyCall(target, HowToCall.DelegateCall, calldata)
+    })
 
-    const txHash = await sendRawTransaction(
-      this.web3,
-      {
-        from: fromAddress,
-        to: proxyAddress,
-        data: encodeProxyCall(target, HowToCall.DelegateCall, calldata)
-      },
-      (error) => {
-        this._dispatch(EventType.TransactionDenied, {
-          error,
-          accountAddress: fromAddress
-        })
-      }
-    )
+    // const txHash = await sendRawTransaction(
+    //   this.web3,
+    //   {
+    //     from: fromAddress,
+    //     to: proxyAddress,
+    //     data: encodeProxyCall(target, HowToCall.DelegateCall, calldata)
+    //   },
+    //   (error) => {
+    //     this._dispatch(EventType.TransactionDenied, {
+    //       error,
+    //       accountAddress: fromAddress
+    //     })
+    //   }
+    // )
 
     await this._confirmTransaction(
-      txHash,
+      txHash?.hash,
       EventType.TransferAll,
-      `Transferring ${assets.length} asset${assets.length === 1 ? '' : 's'}`
+      `Transferring ${assets.length} asset${assets.length === 1 ? '' : 's'} to ${toAddress}`
     )
-    return txHash
+    return txHash?.hash
   }
 
   /**
@@ -1908,15 +1902,18 @@ export class SDK {
     accountAddress: string,
     retries = 0
   ): Promise<string | null> {
-    console.log('getProxy', this._wyvernProtocolReadOnly)
-    let proxyAddress: string | null =
-      await this._wyvernProtocolReadOnly.wyvernProxyRegistry
-        .proxies(accountAddress)
-        .callAsync()
+    // console.log('getProxy', this._wyvernProtocolReadOnly)
+    // let proxyAddress: string | null =
+    //   await this._wyvernProtocolReadOnly.wyvernProxyRegistry
+    //     .proxies(accountAddress)
+    //     .callAsync()
 
+    const tokenContract = new ethers.Contract(proxyRegistryContractByChainId(this._network_chain_id), ProxyRegistryABI, this.signer)
+    console.log('checking proxy', tokenContract, accountAddress)
+    let proxyAddress: string | null = await tokenContract.proxies(accountAddress).catch(e => console.log(e))
     if (proxyAddress === '0x') {
       throw new Error(
-        "Couldn't retrieve your account from the blockchain - make sure you're on the correct Ethereum network!"
+        "Couldn't retrieve your account from the blockchain - make sure you're on the correct network!"
       )
     }
 
@@ -1938,20 +1935,31 @@ export class SDK {
    * @param accountAddress The user's wallet address
    * @param wyvernProtocol optional wyvern protocol override
    */
+
   public async _initializeProxy (accountAddress: string): Promise<string> {
     this._dispatch(EventType.InitializeAccount, { accountAddress })
     this.logger(`Initializing proxy for account: ${accountAddress}`)
 
-    const txnData = { from: accountAddress }
-    const gasEstimate = await this._wyvernProtocol.wyvernProxyRegistry
-      .registerProxy()
-      .estimateGasAsync(txnData)
-    const transactionHash = await this._wyvernProtocol.wyvernProxyRegistry
-      .registerProxy()
-      .sendTransactionAsync({
-        ...txnData,
-        gas: this._correctGasAmount(gasEstimate)
-      })
+    // const txnData = { from: accountAddress }
+
+    const contract = new ethers.Contract(proxyRegistryContractByChainId(this._network_chain_id), ProxyRegistryABI, this.signer)
+    const feeData = await this.signer.provider.getFeeData()
+
+    console.log('start', contract, feeData)
+    const tx = await contract.registerProxy({
+      gasPrice: feeData?.gasPrice
+    })
+    console.log(tx)
+    const transactionHash = tx?.hash
+    // const gasEstimate = await this._wyvernProtocol.wyvernProxyRegistry
+    //   .registerProxy()
+    //   .estimateGasAsync(txnData)
+    // const transactionHash = await this._wyvernProtocol.wyvernProxyRegistry
+    //   .registerProxy()
+    //   .sendTransactionAsync({
+    //     ...txnData,
+    //     gas: this._correctGasAmount(gasEstimate)
+    //   })
 
     await this._confirmTransaction(
       transactionHash,
@@ -2711,12 +2719,14 @@ export class SDK {
     accountAddress: string;
     proxyAddress?: string;
   }) {
+    console.log('approve all')
     proxyAddress =
       proxyAddress || (await this._getProxy(accountAddress, 0)) || undefined
     if (!proxyAddress) {
       proxyAddress = await this._initializeProxy(accountAddress)
     }
 
+    console.log('proxy', proxyAddress)
     const contractsWithApproveAll: Set<string> = new Set()
 
     return Promise.all(
@@ -2757,6 +2767,7 @@ export class SDK {
           // Handle NFTs and SFTs
           // eslint-disable-next-line no-case-declarations
           const wyNFTAsset = wyAsset as WyvernNFTAsset
+          console.log('approve NFT', wyNFTAsset)
           return await this.approveSemiOrNonFungibleToken({
             tokenId: wyNFTAsset.id.toString(),
             tokenAddress: wyNFTAsset.address,
@@ -2766,6 +2777,7 @@ export class SDK {
             skipApproveAllIfTokenAddressIn: contractsWithApproveAll
           })
         case WyvernSchemaName.ERC20:
+          console.log('approve ERC20')
           // Handle FTs
           // eslint-disable-next-line no-case-declarations
           const wyFTAsset = wyAsset as WyvernFTAsset

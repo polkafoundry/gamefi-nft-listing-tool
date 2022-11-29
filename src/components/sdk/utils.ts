@@ -293,10 +293,18 @@ export const USDT_POLYGON: Token = {
   address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F'
 }
 
+export const USDT_MUMBAI: Token = {
+  name: 'USDT',
+  symbol: 'USDT',
+  decimals: 6,
+  image: '',
+  address: '0x2058A9D7613eEE744279e3856Ef0eAda5FCbaA7e'
+}
+
 export const supportedCurrencies = {
   eth: [ETH, USDT_ERC],
   bsc: [BNB, BUSD_BSC, GAFI, BUSD_TESTNET],
-  polygon: [MATIC, USDT_POLYGON]
+  polygon: [MATIC, USDT_POLYGON, USDT_MUMBAI]
 }
 
 export const getSupportedCurrencyByAddrress = (address: string, network: string) => {
@@ -310,7 +318,7 @@ export const getSupportedCurrencyByAddrress = (address: string, network: string)
   case 'eth':
     return address === ethers.constants.AddressZero ? ETH : supportedCurrencies.eth.find(item => item.address?.toLowerCase() === address.toLowerCase())
   case 'mumbai':
-  case 'polygon':
+  case 'matic':
     return address === ethers.constants.AddressZero ? MATIC : supportedCurrencies.polygon.find(item => item.address?.toLowerCase() === address.toLowerCase())
   default:
     return null
